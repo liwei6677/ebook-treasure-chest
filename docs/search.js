@@ -2,6 +2,23 @@ let books = [];
 let searchTimeout = null;
 const MAX_RESULTS = 100; // 最多显示100条结果
 
+// 从 URL 查询参数读取初始搜索词
+function getQueryParam(name) {
+  const params = new URLSearchParams(window.location.search);
+  return params.get(name) || "";
+}
+
+// 将搜索词同步到 URL（不刷新页面）
+function updateUrlParam(keyword) {
+  const url = new URL(window.location.href);
+  if (keyword) {
+    url.searchParams.set("q", keyword);
+  } else {
+    url.searchParams.delete("q");
+  }
+  window.history.replaceState(null, "", url.toString());
+}
+
 async function loadBooks() {
   console.log("🔄 开始加载书籍数据...");
   
@@ -16,7 +33,7 @@ async function loadBooks() {
       console.log(`✅ 已加载 ${books.length} 本书籍（来自 all-books.json）`);
       
       // 显示加载成功的提示
-      const searchBox = document.querySelector('input[type="text"]');
+      const searchBox = document.getElementById("search-input");
       if (searchBox) {
         const originalPlaceholder = searchBox.placeholder;
         searchBox.placeholder = `已加载 ${books.length.toLocaleString()} 本书，开始搜索...`;
@@ -24,6 +41,9 @@ async function loadBooks() {
           searchBox.placeholder = originalPlaceholder;
         }, 3000);
       }
+      
+      // 加载完成后，处理 URL 中的查询参数
+      applyUrlSearch();
       return;
     } else {
       console.warn(`⚠️  all-books.json 返回状态码: ${res.status}`);
@@ -40,6 +60,7 @@ async function loadBooks() {
       books = await res.json();
       console.log(`✅ 已加载 ${books.length} 本书籍（来自 books.json，metadata 数据）`);
       console.warn("💡 提示：建议运行 'python scripts/parse_md_to_json.py' 生成完整的 all-books.json");
+      applyUrlSearch();
     } else {
       console.error(`❌ books.json 返回状态码: ${res.status}`);
     }
@@ -202,6 +223,12 @@ function renderResults(results, keyword) {
 function onSearch(e) {
   const keyword = e.target.value.trim();
   
+  // 同步 URL 查询参数
+  updateUrlParam(keyword);
+
+  // 更新清除按钮的可见性
+  updateClearButton(keyword);
+  
   // 检查数据是否已加载
   if (books.length === 0) {
     const box = document.getElementById("search-results");
@@ -228,11 +255,83 @@ function onSearch(e) {
   }, 300);
 }
 
+// 更新清除按钮的显示状态
+function updateClearButton(keyword) {
+  const clearBtn = document.getElementById("search-clear-btn");
+  if (clearBtn) {
+    clearBtn.style.display = keyword ? "flex" : "none";
+  }
+}
+
+// 清空搜索框
+function clearSearch() {
+  const input = document.getElementById("search-input");
+  if (input) {
+    input.value = "";
+    input.focus();
+    updateUrlParam("");
+    updateClearButton("");
+    document.getElementById("search-results").innerHTML = "";
+  }
+}
+
+// 根据 URL 查询参数预填搜索框并执行搜索
+function applyUrlSearch() {
+  const q = getQueryParam("q");
+  if (!q) return;
+  
+  const input = document.getElementById("search-input");
+  if (!input) return;
+  
+  input.value = q;
+  updateClearButton(q);
+  
+  // 滚动到搜索区域
+  input.scrollIntoView({ behavior: "smooth", block: "center" });
+  
+  const results = searchBooks(q);
+  console.log(`🔍 URL 参数搜索 "${q}" 找到 ${results.length} 条结果`);
+  renderResults(results, q);
+}
+
+// 注册键盘快捷键
+function isEditableElement(el) {
+  const tag = el.tagName;
+  return tag === "INPUT" || tag === "TEXTAREA" || el.isContentEditable;
+}
+
+function setupKeyboardShortcuts() {
+  document.addEventListener("keydown", function(e) {
+    // 按 / 键聚焦搜索框（当焦点不在输入框时）
+    if (e.key === "/" && !isEditableElement(document.activeElement)) {
+      e.preventDefault();
+      const input = document.getElementById("search-input");
+      if (input) {
+        input.focus();
+        input.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+    
+    // 按 Escape 键清空搜索框并取消聚焦
+    if (e.key === "Escape") {
+      const input = document.getElementById("search-input");
+      if (input && document.activeElement === input) {
+        clearSearch();
+        input.blur();
+      }
+    }
+  });
+}
+
 // 页面加载完成后加载数据
 (function() {
   if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', loadBooks);
+    document.addEventListener('DOMContentLoaded', function() {
+      loadBooks();
+      setupKeyboardShortcuts();
+    });
   } else {
     loadBooks();
+    setupKeyboardShortcuts();
   }
 })();
