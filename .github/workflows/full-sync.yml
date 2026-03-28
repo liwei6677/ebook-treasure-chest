@@ -13,6 +13,8 @@ jobs:
   full-sync:
     runs-on: ubuntu-latest
     timeout-minutes: 600  # 全量同步可能需要较长时间（10小时，支持处理6万+书籍）
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     
     steps:
       - name: Checkout repository
@@ -37,9 +39,9 @@ jobs:
         run: |
           # 检查环境变量
           if [ -z "$BOOK_SITE_DOMAIN" ]; then
-            echo "❌ 错误: BOOK_SITE_DOMAIN 未设置"
+            echo "⚠️  警告: BOOK_SITE_DOMAIN 未设置，跳过同步"
             echo "请在 GitHub Repository Settings > Secrets and variables > Actions 中添加 BOOK_SITE_DOMAIN"
-            exit 1
+            exit 0
           fi
           
           echo "✅ BOOK_SITE_DOMAIN 已从GitHub Secrets加载"
